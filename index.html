@@ -25,7 +25,7 @@
     .controls{display:flex;gap:12px;align-items:flex-end;margin-top:12px;flex-wrap:wrap}
     .field{display:flex;flex-direction:column;gap:6px;min-width:220px;flex:1}
     .currency-field{min-width:180px;max-width:180px}
-    input[type="number"], input[type="month"], input[type="text"], textarea, select{width:100%;padding:8px 10px;border:1px solid var(--line);border-radius:6px;font-size:14px;background:#fff;color:var(--text)}
+    input[type="number"], input[type="month"], input[type="text"], textarea, select{width:100%;padding:8px 10px;border:1px solid var(--line);border-radius:6px;font-size:14px;background:#fff;color:[...]
     input:disabled{background:#f3f5f9;color:#6b7280;cursor:not-allowed}
     /* Button base */
     button{
@@ -268,7 +268,7 @@
           <label>Google Apps Script Web App URL
             <input type="text" id="settingsSheetsUrl" placeholder="https://script.google.com/macros/s/.../exec" />
           </label>
-          <a class="inline-link" href="https://script.google.com/home/projects" target="_blank" rel="noopener noreferrer">Open Google Apps Script</a>
+          <a class="inline-link" href="https://github.com/nirvash0074/monthly-budget-app/blob/main/google-apps-script/google_apps_script.gs" target="_blank" rel="noopener noreferrer">Open Google Apps Script</a>
           <label style="display:flex;align-items:center;gap:8px"><input type="checkbox" id="settingsSyncCheckbox" /> Sync to Google Sheets</label>
           <label style="display:flex;align-items:center;gap:8px"><input type="checkbox" id="settingsUseAsPrimary" /> Use Google Sheets as primary DB (load on startup)</label>
         </div>
@@ -425,7 +425,6 @@
     const pushAllBtn = document.getElementById('pushAllBtn');
     const sheetsStatus = document.getElementById('sheetsStatus');
 
-    // Settings modal elements
     const openSettingsBtn = document.getElementById('openSettingsBtn');
     const settingsModal = document.getElementById('settingsModal');
     const closeSettingsBtn = document.getElementById('closeSettingsBtn');
@@ -597,7 +596,7 @@
 
     function escapeHtmlAttr(s){
       if (s === undefined || s === null) return '';
-      return String(s).replace(/\"/g,'&quot;').replace(/</g,'&lt;');
+      return String(s).replace(/"/g,'&quot;').replace(/</g,'&lt;');
     }
 
     function render(){
@@ -668,8 +667,7 @@
           node.style.display = 'flex';
           node.style.justifyContent = 'space-between';
           node.style.marginTop = '6px';
-          node.innerHTML = `<div><strong>${escapeHtml(name)}</strong> <span class="small muted">· ${pctCat}%</span><div class="small muted">Spent: ${formatMoney(spent)} · Allocated: ${formatMoney(alloc)} · Remaining: ${formatMoney(rem)}</div></div>
-          <div class="small muted">${formatMoney(rem)}</div>`;
+          node.innerHTML = `<div><strong>${escapeHtml(name)}</strong> <span class="small muted">· ${pctCat}%</span><div class="small muted">Spent: ${formatMoney(spent)} · Allocated: ${formatMoney(alloc)}</div></div><div class="small muted">${formatMoney(rem)}</div>`;
           byCategory.appendChild(node);
         }
 
@@ -999,43 +997,75 @@
       URL.revokeObjectURL(url);
     };
 
-    openSettingsBtn.addEventListener('click', () => {
+    function openSettings(){
       settingsModal.classList.add('show');
       settingsModal.setAttribute('aria-hidden', 'false');
       settingsSheetsUrl.value = getSheetsUrl();
       settingsSyncCheckbox.checked = !!(state.prefs && state.prefs.syncToSheets);
       settingsUseAsPrimary.checked = !!(state.prefs && state.prefs.useSheetsPrimary);
-    });
+    }
 
-    closeSettingsBtn.addEventListener('click', () => {
+    function closeSettings(){
       settingsModal.classList.remove('show');
       settingsModal.setAttribute('aria-hidden', 'true');
-    });
+    }
 
-    cancelSettingsBtn.addEventListener('click', () => {
-      settingsModal.classList.remove('show');
-      settingsModal.setAttribute('aria-hidden', 'true');
-    });
-
-    settingsForm.addEventListener('submit', (event) => {
-      event.preventDefault();
+    openSettingsBtn.addEventListener('click', openSettings);
+    closeSettingsBtn.addEventListener('click', closeSettings);
+    cancelSettingsBtn.addEventListener('click', closeSettings);
+    settingsModal.addEventListener('click', closeSettings);
+    settingsForm.addEventListener('submit', (ev) => {
+      ev.preventDefault();
       const url = settingsSheetsUrl.value.trim();
       setSheetsUrl(url);
       state.prefs = state.prefs || {};
       state.prefs.syncToSheets = !!settingsSyncCheckbox.checked;
       state.prefs.useSheetsPrimary = !!settingsUseAsPrimary.checked;
       saveState(state);
-      sheetsUrlInput.value = url;
-      syncSheetsCheckbox.checked = state.prefs.syncToSheets;
-      settingsModal.classList.remove('show');
-      settingsModal.setAttribute('aria-hidden', 'true');
+      render();
+      closeSettings();
     });
 
-    document.addEventListener('DOMContentLoaded', () => {
-      monthPicker.value = todayMonth();
-      budgetInput.value = state.budgets[monthPicker.value] ?? '';
+    syncSheetsCheckbox.addEventListener('change', () => {
+      state.prefs = state.prefs || {};
+      state.prefs.syncToSheets = !!syncSheetsCheckbox.checked;
+      saveState(state);
       render();
     });
+
+    testSheetsBtn.addEventListener('click', async () => {
+      try {
+        const result = await sendToSheets({ type: 'ping' });
+        sheetsStatus.textContent = result.ok ? 'Sheets connection is working.' : `Connection failed: ${result.status}`;
+      } catch (err) {
+        sheetsStatus.textContent = 'Connection failed. Check the Apps Script URL.';
+        console.warn('Sheets test failed', err);
+      }
+    });
+
+    pushAllBtn.addEventListener('click', async () => {
+      const key = getMonthKeyFromInput(monthPicker.value);
+      const expenses = getExpensesForMonth(key);
+      const categories = getCategoriesForMonth(key);
+      const payload = { type: 'monthSync', month: key, expenses, categories, budget: Number(state.budgets[key] || 0) };
+      try {
+        const result = await sendToSheets(payload);
+        sheetsStatus.textContent = result.ok ? 'Month data pushed to Sheets.' : `Push failed: ${result.status}`;
+      } catch (err) {
+        sheetsStatus.textContent = 'Push failed. Check the Apps Script URL.';
+        console.warn('Sheets push all failed', err);
+      }
+    });
+
+    function init(){
+      const selectedMonth = todayMonth();
+      monthPicker.value = selectedMonth;
+      budgetInput.value = state.budgets[selectedMonth] ?? '';
+      expDate.value = selectedMonth + '-01';
+      render();
+    }
+
+    init();
   </script>
 </body>
 </html>

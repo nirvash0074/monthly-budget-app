@@ -25,7 +25,7 @@
     .controls{display:flex;gap:12px;align-items:flex-end;margin-top:12px;flex-wrap:wrap}
     .field{display:flex;flex-direction:column;gap:6px;min-width:220px;flex:1}
     .currency-field{min-width:180px;max-width:180px}
-    input[type="number"], input[type="month"], input[type="text"], textarea, select{width:100%;padding:8px 10px;border:1px solid var(--line);border-radius:6px;font-size:14px;background:#fff;color:#111827}
+    input[type="number"], input[type="month"], input[type="text"], textarea, select{width:100%;padding:8px 10px;border:1px solid var(--line);border-radius:6px;font-size:14px;background:#fff;color:var(--text)}
     input:disabled{background:#f3f5f9;color:#6b7280;cursor:not-allowed}
     /* Button base */
     button{
@@ -85,9 +85,14 @@
         <h1>Monthly Budget & Expenses</h1>
         <div class="muted">Track your monthly budget, create global categories, and manage allocation amounts.</div>
       </div>
-      <div style="text-align:right">
-        <div class="muted">Local-only demo · saved in browser</div>
-        <div class="small muted" id="versionText">v10</div>
+      <div style="text-align:right;display:flex;gap:8px;align-items:center">
+        <div style="text-align:right">
+          <div class="muted">Local-only demo · saved in browser</div>
+          <div class="small muted" id="versionText">v10</div>
+        </div>
+        <div>
+          <button class="ghost" id="openSettingsBtn">Settings</button>
+        </div>
       </div>
     </header>
 
@@ -249,6 +254,32 @@
     </div>
   </div>
 
+  <!-- Settings modal (configure Web App URL and sync preference) -->
+  <div id="settingsModal" class="modal" aria-hidden="true">
+    <div class="modal-content" role="dialog" aria-modal="true" aria-labelledby="settingsModalTitle" onclick="event.stopPropagation()">
+      <div class="modal-header">
+        <h3 id="settingsModalTitle">Settings</h3>
+        <button class="close" id="closeSettingsBtn" title="Close">&times;</button>
+      </div>
+      <form id="settingsForm">
+        <div style="display:flex;flex-direction:column;gap:8px;margin-top:12px">
+          <label>Google Apps Script Web App URL
+            <input type="text" id="settingsSheetsUrl" placeholder="https://script.google.com/macros/s/.../exec" />
+          </label>
+          <label style="display:flex;align-items:center;gap:8px"><input type="checkbox" id="settingsSyncCheckbox" /> Sync to Google Sheets</label>
+          <label style="display:flex;align-items:center;gap:8px"><input type="checkbox" id="settingsUseAsPrimary" /> Use Google Sheets as primary DB (load on startup)</label>
+        </div>
+
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-top:12px;flex-wrap:wrap">
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <button type="submit">Save</button>
+            <button type="button" class="ghost" id="cancelSettingsBtn">Cancel</button>
+          </div>
+        </div>
+      </form>
+    </div>
+  </div>
+
   <div id="expenseModal" class="modal" aria-hidden="true">
     <div class="modal-content" role="dialog" aria-modal="true" aria-labelledby="expenseModalTitle" onclick="event.stopPropagation()">
       <div class="modal-header">
@@ -328,7 +359,7 @@
         { id: uid(), name: 'Savings', allocated: 0 },
         { id: uid(), name: 'Other', allocated: 0 }
       ];
-      return { budgets:{}, expenses:[], categories:{}, globalCategories:defaults, prefs:{autoApplyGlobal:true, syncToSheets:false} };
+      return { budgets:{}, expenses:[], categories:{}, globalCategories:defaults, prefs:{autoApplyGlobal:true, syncToSheets:false, useSheetsPrimary:false} };
     }
 
     function loadState(){ try{ const raw=localStorage.getItem(LS_KEY); return raw?JSON.parse(raw):defaultState(); }catch(e){ return defaultState(); } }
@@ -390,6 +421,16 @@
     const testSheetsBtn = document.getElementById('testSheetsBtn');
     const pushAllBtn = document.getElementById('pushAllBtn');
     const sheetsStatus = document.getElementById('sheetsStatus');
+
+    // Settings modal elements
+    const openSettingsBtn = document.getElementById('openSettingsBtn');
+    const settingsModal = document.getElementById('settingsModal');
+    const closeSettingsBtn = document.getElementById('closeSettingsBtn');
+    const cancelSettingsBtn = document.getElementById('cancelSettingsBtn');
+    const settingsForm = document.getElementById('settingsForm');
+    const settingsSheetsUrl = document.getElementById('settingsSheetsUrl');
+    const settingsSyncCheckbox = document.getElementById('settingsSyncCheckbox');
+    const settingsUseAsPrimary = document.getElementById('settingsUseAsPrimary');
 
     function getMonthKeyFromInput(val){ return val; }
     function getExpensesForMonth(key){ return state.expenses.filter(e => e.date.slice(0,7) === key).sort((a,b) => b.date.localeCompare(a.date)); }
@@ -669,6 +710,11 @@
       // Sheets UI
       sheetsUrlInput.value = getSheetsUrl();
       syncSheetsCheckbox.checked = !!(state.prefs && state.prefs.syncToSheets);
+
+      // Keep settings modal inputs in sync when open
+      settingsSheetsUrl.value = getSheetsUrl();
+      settingsSyncCheckbox.checked = !!(state.prefs && state.prefs.syncToSheets);
+      settingsUseAsPrimary.checked = !!(state.prefs && state.prefs.useSheetsPrimary);
     }
 
     function renderCategoriesEditor(monthKey){
@@ -956,6 +1002,46 @@
       URL.revokeObjectURL(url);
     };
 
+    // Settings modal handlers
+    openSettingsBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      settingsSheetsUrl.value = getSheetsUrl();
+      settingsSyncCheckbox.checked = !!(state.prefs && state.prefs.syncToSheets);
+      settingsUseAsPrimary.checked = !!(state.prefs && state.prefs.useSheetsPrimary);
+      settingsModal.classList.add('show');
+      settingsModal.setAttribute('aria-hidden','false');
+    });
+
+    function closeSettings(){
+      settingsModal.classList.remove('show');
+      settingsModal.setAttribute('aria-hidden','true');
+    }
+
+    closeSettingsBtn.addEventListener('click', closeSettings);
+    cancelSettingsBtn.addEventListener('click', closeSettings);
+    settingsModal.addEventListener('click', closeSettings);
+
+    settingsForm.addEventListener('submit', (ev) => {
+      ev.preventDefault();
+      const url = settingsSheetsUrl.value.trim();
+      setSheetsUrl(url);
+      state.prefs = state.prefs || {};
+      state.prefs.syncToSheets = !!settingsSyncCheckbox.checked;
+      state.prefs.useSheetsPrimary = !!settingsUseAsPrimary.checked;
+      saveState(state);
+
+      // keep main UI in sync
+      sheetsUrlInput.value = getSheetsUrl();
+      syncSheetsCheckbox.checked = !!state.prefs.syncToSheets;
+      render();
+      closeSettings();
+
+      if (state.prefs.useSheetsPrimary){
+        // attempt to load on-demand
+        loadFromSheetsIfConfigured().catch(err => console.warn('Load from sheets failed', err));
+      }
+    });
+
     testSheetsBtn.addEventListener('click', async () => {
       const url = sheetsUrlInput.value.trim();
       setSheetsUrl(url);
@@ -991,6 +1077,30 @@
     sheetsUrlInput.addEventListener('change', () => { setSheetsUrl(sheetsUrlInput.value.trim()); });
     syncSheetsCheckbox.addEventListener('change', () => { state.prefs = state.prefs || {}; state.prefs.syncToSheets = !!syncSheetsCheckbox.checked; saveState(state); render(); });
 
+    // Optional: load from sheets if configured and requested by user preference
+    async function loadFromSheetsIfConfigured(){
+      const url = getSheetsUrl();
+      if (!url) throw new Error('No sheets URL');
+      try{
+        const resp = await fetch(url + (url.indexOf('?') === -1 ? '?' : '&') + 'action=load', { method: 'GET' });
+        const json = await resp.json();
+        if (!json || !json.ok) throw new Error('Load failed');
+        // Merge/replace state parts
+        state.budgets = json.budgets || {};
+        state.categories = json.categories || {};
+        // Expenses may be an array of objects with id,date,desc,category,amount,notes
+        state.expenses = Array.isArray(json.expenses) ? json.expenses.map(e => ({ id: e.id || uid(), date: e.date || '', desc: e.desc || '', category: e.category || '', amount: Number(e.amount || 0), notes: e.notes || '' })) : [];
+        saveState(state);
+        render();
+        sheetsStatus.textContent = 'Loaded from Sheets';
+        return true;
+      }catch(e){
+        sheetsStatus.textContent = 'Load from Sheets failed';
+        console.warn('loadFromSheetsIfConfigured error', e);
+        throw e;
+      }
+    }
+
     (function init(){
       currencySelect.value = getSelectedCurrency();
       monthPicker.value = todayMonth();
@@ -998,24 +1108,14 @@
       const key = getMonthKeyFromInput(monthPicker.value);
       budgetInput.value = state.budgets[key] ?? '';
       sheetsUrlInput.value = getSheetsUrl();
-      syncSheetsCheckbox.checked = !!(state.prefs && state.prefs.syncToSheets);
-      monthPicker.dispatchEvent(new Event('change'));
+
+      // If the user opted to use Sheets as primary and a URL is configured, try to load
+      if (state.prefs && state.prefs.useSheetsPrimary && getSheetsUrl()){
+        loadFromSheetsIfConfigured().catch(() => { /* ignore on init */ });
+      }
+
       render();
     })();
-
-    window.addEventListener('storage', (event) => {
-      if (event.key === LS_KEY){
-        state = loadState();
-        render();
-      }
-      if (event.key === CURRENCY_STORAGE_KEY){
-        currencySelect.value = getSelectedCurrency();
-        render();
-      }
-      if (event.key === SHEETS_URL_KEY){
-        sheetsUrlInput.value = getSheetsUrl();
-      }
-    });
   </script>
 </body>
 </html>

@@ -25,7 +25,7 @@
     .controls{display:flex;gap:12px;align-items:flex-end;margin-top:12px;flex-wrap:wrap}
     .field{display:flex;flex-direction:column;gap:6px;min-width:220px;flex:1}
     .currency-field{min-width:180px;max-width:180px}
-    input[type="number"], input[type="month"], input[type="text"], textarea, select{width:100%;padding:8px 10px;border:1px solid var(--line);border-radius:6px;font-size:14px;background:#fff;color:var(--text)}
+    input[type="number"], input[type="month"], input[type="text"], textarea, select{width:100%;padding:8px 10px;border:1px solid var(--line);border-radius:6px;font-size:14px;background:#fff;color:inherit}
     input:disabled{background:#f3f5f9;color:#6b7280;cursor:not-allowed}
     /* Button base */
     button{
@@ -257,6 +257,9 @@
           <textarea id="expNotes" placeholder="Notes (optional)" style="min-height:80px;flex-basis:100%"></textarea>
         </div>
 
+        <div style="display:flex;gap:8px;margin-top:8px">
+        </div>
+
         <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-top:12px;flex-wrap:wrap">
           <div style="display:flex;gap:8px;flex-wrap:wrap">
             <button type="submit">Save</button>
@@ -282,10 +285,19 @@
       if (!SUPPORTED_CURRENCIES.includes(code)) return;
       localStorage.setItem(CURRENCY_STORAGE_KEY, code);
     }
+
+    // Format numbers as currency using the selected currency code
     function formatMoney(n){
       const currency = getSelectedCurrency();
-      return (n === null || isNaN(n)) ? new Intl.NumberFormat(undefined,{style:'currency',currency:currency}).format(0) : new Intl.NumberFormat(undefined,{style:'currency',currency:currency}).format(n);
+      const value = (n === null || n === undefined || isNaN(Number(n))) ? 0 : Number(n);
+      try{
+        return new Intl.NumberFormat(undefined, { style: 'currency', currency: currency }).format(value);
+      }catch(e){
+        // Fallback: basic formatting with currency code prefix
+        return currency + ' ' + value.toFixed(2);
+      }
     }
+
     function todayMonth(){ const d=new Date(); const m=d.getMonth()+1; return d.getFullYear()+'-'+String(m).padStart(2,'0'); }
 
     function defaultState(){
@@ -552,7 +564,7 @@
           node.style.display = 'flex';
           node.style.justifyContent = 'space-between';
           node.style.marginTop = '6px';
-          node.innerHTML = `<div><strong>${escapeHtml(name)}</strong> <span class="small muted">· ${pctCat}%</span><div class="small muted">Spent: ${formatMoney(spent)} · Allocated: ${formatMoney(alloc)} · Remaining: ${formatMoney(rem)}</div></div><div class="small muted">${formatMoney(spent)} / ${formatMoney(alloc)}</div>`;
+          node.innerHTML = `<div><strong>${escapeHtml(name)}</strong> <span class="small muted">· ${pctCat}%</span><div class="small muted">Spent: ${formatMoney(spent)} · Allocated: ${formatMoney(alloc)}</div></div><div>${formatMoney(rem)}</div>`;
           byCategory.appendChild(node);
         }
 

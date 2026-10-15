@@ -98,17 +98,17 @@
           <div style="display:flex;gap:22px;margin-top:6px;flex-wrap:wrap">
             <div>
               <div class="small muted">Spent</div>
-              <div class="big" id="spentTotal">$0.00</div>
+              <div class="big" id="spentTotal">PHP0.00</div>
             </div>
             <div>
               <div class="small muted">Total Budget <span id="budgetSource" class="small muted"></span></div>
-              <div class="big" id="budgetTotal">$0.00</div>
+              <div class="big" id="budgetTotal">PHP0.00</div>
             </div>
           </div>
           <div style="margin-top:8px;">
             <div class="small muted">Remaining</div>
             <div style="display:flex;align-items:center;gap:10px">
-              <div style="font-size:18px;font-weight:600" id="remaining">$0.00</div>
+              <div style="font-size:18px;font-weight:600" id="remaining">PHP0.00</div>
               <div class="small muted" id="percentUsed">0%</div>
             </div>
             <div class="meter"><i id="meterFill"></i></div>
@@ -143,6 +143,7 @@
       <label class="field currency-field">
         Display currency
         <select id="currencySelect" aria-label="Select display currency">
+          <option value="PHP">PHP</option>
           <option value="USD">USD</option>
           <option value="EUR">EUR</option>
           <option value="GBP">GBP</option>
@@ -228,8 +229,21 @@
         </div>
 
         <div style="margin-top:12px">
+          <div class="muted small">Google Sheets sync</div>
+          <div style="display:flex;gap:8px;margin-top:8px;flex-direction:column">
+            <input type="text" id="sheetsUrlInput" placeholder="Google Apps Script URL (doPost)" />
+            <label style="display:flex;align-items:center;gap:8px"><input type="checkbox" id="syncSheetsCheckbox" /> Sync to Google Sheets</label>
+            <div style="display:flex;gap:8px">
+              <button class="ghost" id="testSheetsBtn">Test connection</button>
+              <button class="ghost" id="pushAllBtn">Push this month's data</button>
+            </div>
+            <div id="sheetsStatus" class="small muted" style="margin-top:6px"></div>
+          </div>
+        </div>
+
+        <div style="margin-top:12px">
           <div class="muted small">Notes</div>
-          <div class="small muted" style="margin-top:6px">Local-only demo; data is stored in browser localStorage.</div>
+          <div class="small muted" style="margin-top:6px">Local-only demo; data is stored in browser localStorage unless you enable Google Sheets sync.</div>
         </div>
       </div>
     </div>
@@ -274,17 +288,21 @@
   <script>
     const LS_KEY = 'budgetExpenses_v10';
     const CURRENCY_STORAGE_KEY = 'budgetCurrency';
-    const SUPPORTED_CURRENCIES = ['USD', 'EUR', 'GBP', 'INR', 'JPY', 'CAD', 'AUD'];
+    const SHEETS_URL_KEY = 'budgetSheetsUrl';
+    const SUPPORTED_CURRENCIES = ['PHP','USD', 'EUR', 'GBP', 'INR', 'JPY', 'CAD', 'AUD'];
 
     function uid(){ return Math.random().toString(36).slice(2,9); }
     function getSelectedCurrency(){
       const stored = localStorage.getItem(CURRENCY_STORAGE_KEY);
-      return SUPPORTED_CURRENCIES.includes(stored) ? stored : 'USD';
+      return SUPPORTED_CURRENCIES.includes(stored) ? stored : 'PHP';
     }
     function setSelectedCurrency(code){
       if (!SUPPORTED_CURRENCIES.includes(code)) return;
       localStorage.setItem(CURRENCY_STORAGE_KEY, code);
     }
+
+    function getSheetsUrl(){ return localStorage.getItem(SHEETS_URL_KEY) || ''; }
+    function setSheetsUrl(url){ localStorage.setItem(SHEETS_URL_KEY, url || ''); }
 
     // Format numbers as currency using the selected currency code
     function formatMoney(n){
@@ -310,7 +328,7 @@
         { id: uid(), name: 'Savings', allocated: 0 },
         { id: uid(), name: 'Other', allocated: 0 }
       ];
-      return { budgets:{}, expenses:[], categories:{}, globalCategories:defaults, prefs:{autoApplyGlobal:true} };
+      return { budgets:{}, expenses:[], categories:{}, globalCategories:defaults, prefs:{autoApplyGlobal:true, syncToSheets:false} };
     }
 
     function loadState(){ try{ const raw=localStorage.getItem(LS_KEY); return raw?JSON.parse(raw):defaultState(); }catch(e){ return defaultState(); } }
@@ -367,12 +385,33 @@
     const exportCsvTop = document.getElementById('exportCsvTop');
     const gotoManageCats = document.getElementById('gotoManageCats');
     const downloadAll = document.getElementById('downloadAll');
+    const sheetsUrlInput = document.getElementById('sheetsUrlInput');
+    const syncSheetsCheckbox = document.getElementById('syncSheetsCheckbox');
+    const testSheetsBtn = document.getElementById('testSheetsBtn');
+    const pushAllBtn = document.getElementById('pushAllBtn');
+    const sheetsStatus = document.getElementById('sheetsStatus');
 
     function getMonthKeyFromInput(val){ return val; }
     function getExpensesForMonth(key){ return state.expenses.filter(e => e.date.slice(0,7) === key).sort((a,b) => b.date.localeCompare(a.date)); }
     function getCategoriesForMonth(key){ return (state.categories[key] || []).slice(); }
     function getGlobalCategories(){ return (state.globalCategories || []).slice(); }
     function saveGlobalCategories(arr){ state.globalCategories = arr; saveState(state); }
+
+    async function sendToSheets(payload){
+      const url = getSheetsUrl();
+      if (!url) return Promise.reject(new Error('No Sheets URL configured'));
+      try{
+        const res = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        const text = await res.text();
+        return { ok: res.ok, status: res.status, body: text };
+      }catch(e){
+        return Promise.reject(e);
+      }
+    }
 
     function saveCategoriesForMonth(key, arr){
       if (!arr || arr.length === 0){
@@ -382,6 +421,11 @@
         saveState(state);
         if (getMonthKeyFromInput(monthPicker.value) === key){
           budgetInput.value = state.budgets[key] ?? '';
+        }
+        // Optionally push empty list to sheets
+        if (state.prefs && state.prefs.syncToSheets){
+          const payload = { type: 'categories', month: key, categories: [] };
+          sendToSheets(payload).catch(err => { console.warn('Sheets sync failed (categories clear)', err); });
         }
         return;
       }
@@ -394,6 +438,16 @@
 
       if (getMonthKeyFromInput(monthPicker.value) === key){
         budgetInput.value = state.budgets[key] ?? '';
+      }
+
+      if (state.prefs && state.prefs.syncToSheets){
+        const payload = { type: 'categories', month: key, categories: arr.map(c => ({ name: c.name, allocated: Number(c.allocated || 0) })) };
+        sendToSheets(payload).then(r => {
+          sheetsStatus.textContent = r.ok ? 'Categories pushed' : `Sheets push failed: ${r.status}`;
+        }).catch(err => {
+          sheetsStatus.textContent = 'Sheets push failed';
+          console.warn('Sheets sync failed (categories)', err);
+        });
       }
     }
 
@@ -452,7 +506,7 @@
       openModal('Editing');
     }
 
-    expenseForm.addEventListener('submit', (ev) => {
+    expenseForm.addEventListener('submit', async (ev) => {
       ev.preventDefault();
 
       const payload = {
@@ -477,6 +531,15 @@
       }
 
       saveState(state);
+
+      // Optionally push to Google Sheets
+      if (state.prefs && state.prefs.syncToSheets){
+        const p = { type: 'expense', expense: payload };
+        sendToSheets(p).then(r => {
+          sheetsStatus.textContent = r.ok ? 'Expense pushed' : `Sheets push failed: ${r.status}`;
+        }).catch(err => { sheetsStatus.textContent = 'Sheets push failed'; console.warn('Sheets push failed', err); });
+      }
+
       closeModal();
       render();
     });
@@ -602,6 +665,10 @@
       renderGlobalEditor();
       renderCategoryDatalist(monthKey);
       autoApplyGlobalEl.checked = !!(state.prefs && state.prefs.autoApplyGlobal);
+
+      // Sheets UI
+      sheetsUrlInput.value = getSheetsUrl();
+      syncSheetsCheckbox.checked = !!(state.prefs && state.prefs.syncToSheets);
     }
 
     function renderCategoriesEditor(monthKey){
@@ -889,12 +956,49 @@
       URL.revokeObjectURL(url);
     };
 
+    testSheetsBtn.addEventListener('click', async () => {
+      const url = sheetsUrlInput.value.trim();
+      setSheetsUrl(url);
+      sheetsStatus.textContent = 'Testing...';
+      try{
+        const res = await sendToSheets({ type: 'ping', time: new Date().toISOString() });
+        sheetsStatus.textContent = res.ok ? 'Connected' : `Connection failed: ${res.status}`;
+      }catch(e){
+        sheetsStatus.textContent = 'Connection failed';
+        console.warn('Sheets test failed', e);
+      }
+    });
+
+    pushAllBtn.addEventListener('click', async () => {
+      const month = getMonthKeyFromInput(monthPicker.value);
+      const payload = {
+        type: 'month_dump',
+        month,
+        budgets: state.budgets[month] ?? 0,
+        categories: (state.categories[month] || []).map(c => ({ name: c.name, allocated: Number(c.allocated || 0) })),
+        expenses: getExpensesForMonth(month)
+      };
+      sheetsStatus.textContent = 'Pushing...';
+      try{
+        const res = await sendToSheets(payload);
+        sheetsStatus.textContent = res.ok ? 'Pushed month' : `Push failed: ${res.status}`;
+      }catch(e){
+        sheetsStatus.textContent = 'Push failed';
+        console.warn('Push failed', e);
+      }
+    });
+
+    sheetsUrlInput.addEventListener('change', () => { setSheetsUrl(sheetsUrlInput.value.trim()); });
+    syncSheetsCheckbox.addEventListener('change', () => { state.prefs = state.prefs || {}; state.prefs.syncToSheets = !!syncSheetsCheckbox.checked; saveState(state); render(); });
+
     (function init(){
       currencySelect.value = getSelectedCurrency();
       monthPicker.value = todayMonth();
       expDate.value = monthPicker.value + '-01';
       const key = getMonthKeyFromInput(monthPicker.value);
       budgetInput.value = state.budgets[key] ?? '';
+      sheetsUrlInput.value = getSheetsUrl();
+      syncSheetsCheckbox.checked = !!(state.prefs && state.prefs.syncToSheets);
       monthPicker.dispatchEvent(new Event('change'));
       render();
     })();
@@ -907,6 +1011,9 @@
       if (event.key === CURRENCY_STORAGE_KEY){
         currencySelect.value = getSelectedCurrency();
         render();
+      }
+      if (event.key === SHEETS_URL_KEY){
+        sheetsUrlInput.value = getSheetsUrl();
       }
     });
   </script>

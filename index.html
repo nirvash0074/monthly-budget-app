@@ -4,6 +4,10 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Monthly Budget & Expenses</title>
+
+  <!-- Chart.js CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
   <style>
     :root{
       --accent:#2b7cff;
@@ -13,20 +17,43 @@
       --line:#e6e9ef;
       --panel:#fbfdff;
       --text:#111827;
+      --soft:#f3f5f9;
+      --danger:#b03a2e;
       --button-press-scale: 0.97;
       --button-press-duration: 120ms;
     }
+
+    /* Dark theme variables */
+    .dark{
+      --accent:#60a5fa;
+      --muted:#9ca3af;
+      --bg:#0b1220;
+      --card:#070b12;
+      --line:#162231;
+      --panel:#071122;
+      --text:#e6eef8;
+      --soft:#071523;
+      --danger:#ff9b9b;
+    }
+
     *{box-sizing:border-box}
-    body{margin:0;padding:24px;background:var(--bg);color:var(--text);font-family:Inter,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
-    .app{max-width:1000px;margin:0 auto;background:var(--card);border-radius:12px;padding:20px;box-shadow:0 8px 24px rgba(15,23,42,.06)}
-    header{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap}
+    body{margin:0;padding:24px;background:var(--bg);color:var(--text);font-family:Inter,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;transition:background .2s,color .2s}
+
+    .app{max-width:1100px;margin:0 auto;background:var(--card);border-radius:12px;padding:20px;box-shadow:0 8px 24px rgba(15,23,42,.06)}
+    header{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
     h1{margin:0;font-size:20px;line-height:1.2}
     .muted{color:var(--muted);font-size:13px}
+
+    .header-actions{display:flex;gap:8px;align-items:center}
+    .theme-toggle{background:transparent;border:1px solid var(--line);color:var(--text);padding:6px 8px;border-radius:8px;cursor:pointer}
+
     .controls{display:flex;gap:12px;align-items:flex-end;margin-top:12px;flex-wrap:wrap}
     .field{display:flex;flex-direction:column;gap:6px;min-width:220px;flex:1}
-    .currency-field{min-width:180px;max-width:180px}
-    input[type="number"], input[type="month"], input[type="text"], textarea, select{width:100%;padding:8px 10px;border:1px solid var(--line);border-radius:6px;font-size:14px;background:#fff;color:inherit}
-    input:disabled{background:#f3f5f9;color:#6b7280;cursor:not-allowed}
+    .currency-field{min-width:180px;max-width:220px}
+
+    input[type="number"], input[type="month"], input[type="text"], textarea, select{width:100%;padding:8px 10px;border:1px solid var(--line);border-radius:6px;font-size:14px;background:var(--panel);color:var(--text)}
+    input:disabled{background:var(--soft);color:#9aa3b2;cursor:not-allowed}
+
     /* Button base */
     button{
       background:var(--accent);
@@ -41,61 +68,66 @@
       -webkit-tap-highlight-color: transparent;
       user-select: none;
     }
-    /* Ghost buttons */
     button.ghost{background:transparent;color:var(--accent);border:1px solid var(--line);box-shadow:none}
     button:disabled{opacity:.6;cursor:not-allowed}
-    /* Pressed visual state */
-    button:active,
-    button.pressed {
-      transform: translateY(1px) scale(var(--button-press-scale));
-      box-shadow: 0 3px 8px rgba(43,124,255,0.08);
-      opacity: 0.98;
-    }
+    button:active,button.pressed{transform: translateY(1px) scale(var(--button-press-scale));box-shadow: 0 3px 8px rgba(43,124,255,0.08);opacity: 0.98}
     button:focus{outline: 3px solid rgba(43,124,255,0.12); outline-offset:2px}
-    .grid{display:grid;grid-template-columns:1fr 380px;gap:20px;margin-top:18px}
-    .card{background:var(--panel);border:1px solid #f0f3f8;border-radius:10px;padding:14px}
+
+    .grid{display:grid;grid-template-columns:1fr 420px;gap:20px;margin-top:18px}
+    .card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px}
     .big{font-size:20px;font-weight:700}
     .meter{height:16px;background:#e9eefc;border-radius:10px;overflow:hidden;margin-top:8px}
     .meter>i{display:block;height:100%;background:linear-gradient(90deg,var(--accent),#7bd5ff);width:0%}
     table{width:100%;border-collapse:collapse;margin-top:12px}
-    th,td{padding:8px 6px;text-align:left;border-bottom:1px solid #f3f4f6;font-size:14px}
+    th,td{padding:8px 6px;text-align:left;border-bottom:1px solid var(--line);font-size:14px}
     .actions{display:flex;gap:6px;justify-content:flex-end}
     .no-data{padding:18px;text-align:center;color:var(--muted)}
-    .category{display:inline-block;padding:4px 8px;border-radius:6px;background:#eef6ff;color:var(--accent);font-size:13px}
-    .cat-list{max-height:240px;overflow:auto;margin-top:8px;border-top:1px solid #f3f4f6;padding-top:8px}
+    .category{display:inline-block;padding:4px 8px;border-radius:6px;background:rgba(43,124,255,0.06);color:var(--accent);font-size:13px}
+    .cat-list{max-height:240px;overflow:auto;margin-top:8px;border-top:1px solid var(--line);padding-top:8px}
     .cat-row{display:flex;gap:8px;align-items:center;margin-top:8px;flex-wrap:wrap}
     .cat-row input{min-width:120px;flex:1}
-    .warn{color:#b03a2e;font-weight:600}
+    .warn{color:var(--danger);font-weight:600}
     .tabs{display:flex;gap:6px;margin-top:8px}
     .tabs button{padding:6px 8px;border-radius:6px;font-size:13px}
     .activeTab{background:rgba(43,124,255,.06);color:var(--accent);border:1px solid rgba(43,124,255,.08);box-shadow:inset 0 -2px 0 rgba(43,124,255,.2)}
     .modal{position:fixed;inset:0;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,.4);z-index:1000}
     .modal.show{display:flex}
-    .modal-content{width:520px;max-width:95%;background:#fff;border-radius:10px;padding:18px;box-shadow:0 10px 40px rgba(0,0,0,.18)}
+    .modal-content{width:560px;max-width:95%;background:var(--card);border-radius:10px;padding:18px;box-shadow:0 10px 40px rgba(0,0,0,.18)}
     .modal-header{display:flex;align-items:center;justify-content:space-between;gap:12px}
     .close{background:transparent;color:var(--muted);border:none;font-size:22px;line-height:1;padding:0;cursor:pointer}
-    .hint{color:var(--muted);font-size:13px;margin-top:6px}
-    @media (max-width:900px){ .grid{grid-template-columns:1fr} }
+
+    @media (max-width:980px){ .grid{grid-template-columns:1fr} }
+
+    /* Small helper for charts area */
+    .chart-wrap{height:160px}
+    .summary-top{display:flex;gap:12px;align-items:flex-start;flex-wrap:wrap}
+    .summary-left{flex:1}
+    .summary-right{width:360px}
+
   </style>
 </head>
 <body>
-  <div class="app">
+  <div class="app" id="appRoot">
     <header>
       <div>
         <h1>Monthly Budget & Expenses</h1>
         <div class="muted">Track your monthly budget, create global categories, and manage allocation amounts.</div>
       </div>
-      <div style="text-align:right">
-        <div class="muted">Local-only demo · saved in browser</div>
-        <div class="small muted" id="versionText">v10</div>
+
+      <div class="header-actions">
+        <label class="muted small" style="margin-right:6px">Local demo</label>
+        <button class="theme-toggle" id="themeToggle">Toggle dark</button>
+        <div style="text-align:right">
+          <div class="small muted" id="versionText">v10</div>
+        </div>
       </div>
     </header>
 
-    <div class="card top-summary">
-      <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap">
-        <div>
+    <div class="card top-summary" style="margin-top:12px">
+      <div class="summary-top">
+        <div class="summary-left">
           <div class="small muted">Month summary</div>
-          <div style="display:flex;gap:22px;margin-top:6px;flex-wrap:wrap">
+          <div style="display:flex;gap:22px;margin-top:6px;flex-wrap:wrap;align-items:center">
             <div>
               <div class="small muted">Spent</div>
               <div class="big" id="spentTotal">$0.00</div>
@@ -104,23 +136,36 @@
               <div class="small muted">Total Budget <span id="budgetSource" class="small muted"></span></div>
               <div class="big" id="budgetTotal">$0.00</div>
             </div>
-          </div>
-          <div style="margin-top:8px;">
-            <div class="small muted">Remaining</div>
-            <div style="display:flex;align-items:center;gap:10px">
-              <div style="font-size:18px;font-weight:600" id="remaining">$0.00</div>
-              <div class="small muted" id="percentUsed">0%</div>
+            <div style="margin-left:auto;min-width:180px">
+              <div class="small muted">Remaining</div>
+              <div style="display:flex;align-items:center;gap:10px">
+                <div style="font-size:18px;font-weight:600" id="remaining">$0.00</div>
+                <div class="small muted" id="percentUsed">0%</div>
+              </div>
             </div>
-            <div class="meter"><i id="meterFill"></i></div>
+          </div>
+
+          <div style="margin-top:12px">
+            <div class="chart-wrap"><canvas id="spendChart" aria-label="Spending over month"></canvas></div>
           </div>
         </div>
 
-        <div style="min-width:220px">
-          <div class="small muted">Actions</div>
-          <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap">
-            <button id="clearMonth">Clear this month</button>
-            <button class="ghost" id="clearAll">Reset all data</button>
-            <button class="ghost" id="exportCsvTop">Export CSV</button>
+        <div class="summary-right">
+          <div style="display:flex;justify-content:space-between;align-items:center">
+            <div class="small muted">Quick actions</div>
+            <div>
+              <button id="clearMonth">Clear this month</button>
+              <button class="ghost" id="clearAll">Reset all data</button>
+            </div>
+          </div>
+
+          <div style="margin-top:12px">
+            <div class="small muted">Notes</div>
+            <div class="small muted" style="margin-top:6px">Local-only demo; data is stored in browser localStorage.</div>
+          </div>
+
+          <div style="margin-top:12px">
+            <canvas id="budgetDonut" class="chart-wrap" aria-label="Budget vs spent"></canvas>
           </div>
         </div>
       </div>
@@ -176,6 +221,7 @@
           </div>
 
           <div id="byCategory" style="margin-top:8px"></div>
+          <div style="margin-top:12px"><canvas id="catChart" class="chart-wrap" aria-label="Category breakdown"></canvas></div>
 
           <div id="categoriesEditor" style="margin-top:8px;display:none">
             <div class="tabs">
@@ -275,6 +321,7 @@
   <script>
     const LS_KEY = 'budgetExpenses_v10';
     const CURRENCY_STORAGE_KEY = 'budgetCurrency';
+    const THEME_KEY = 'budgetTheme';
     const SUPPORTED_CURRENCIES = ['USD', 'EUR', 'GBP', 'INR', 'PHP', 'JPY', 'CAD', 'AUD'];
 
     function uid(){ return Math.random().toString(36).slice(2,9); }
@@ -285,6 +332,13 @@
     function setSelectedCurrency(code){
       if (!SUPPORTED_CURRENCIES.includes(code)) return;
       localStorage.setItem(CURRENCY_STORAGE_KEY, code);
+    }
+
+    function getTheme(){ return localStorage.getItem(THEME_KEY) === 'dark' ? 'dark' : 'light'; }
+    function applyTheme(name){
+      const root = document.getElementById('appRoot');
+      if (name === 'dark') root.classList.add('dark'); else root.classList.remove('dark');
+      localStorage.setItem(THEME_KEY, name);
     }
 
     // Format numbers as currency using the selected currency code
@@ -320,6 +374,8 @@
     let state = loadState();
     let editingId = null;
 
+    // DOM refs
+    const appRoot = document.getElementById('appRoot');
     const monthPicker = document.getElementById('monthPicker');
     const budgetInput = document.getElementById('budgetInput');
     const budgetDisabledHint = document.getElementById('budgetDisabledHint');
@@ -345,6 +401,7 @@
     const closeModalBtn = document.getElementById('closeModalBtn');
     const cancelExpenseBtn = document.getElementById('cancelExpenseBtn');
     const currencySelect = document.getElementById('currencySelect');
+    const themeToggle = document.getElementById('themeToggle');
 
     const toggleManageCats = document.getElementById('toggleManageCats');
     const categoriesEditor = document.getElementById('categoriesEditor');
@@ -369,8 +426,13 @@
     const gotoManageCats = document.getElementById('gotoManageCats');
     const downloadAll = document.getElementById('downloadAll');
 
+    // Chart instances
+    let spendChart = null;
+    let catChart = null;
+    let budgetDonut = null;
+
     function getMonthKeyFromInput(val){ return val; }
-    function getExpensesForMonth(key){ return state.expenses.filter(e => e.date.slice(0,7) === key).sort((a,b) => b.date.localeCompare(a.date)); }
+    function getExpensesForMonth(key){ return state.expenses.filter(e => e.date && e.date.slice(0,7) === key).sort((a,b) => b.date.localeCompare(a.date)); }
     function getCategoriesForMonth(key){ return (state.categories[key] || []).slice(); }
     function getGlobalCategories(){ return (state.globalCategories || []).slice(); }
     function saveGlobalCategories(arr){ state.globalCategories = arr; saveState(state); }
@@ -435,9 +497,7 @@
     expenseModal.addEventListener('click', closeModal);
     closeModalBtn.addEventListener('click', closeModal);
     cancelExpenseBtn.addEventListener('click', closeModal);
-    document.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape' && expenseModal.classList.contains('show')) closeModal();
-    });
+    document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && expenseModal.classList.contains('show')) closeModal(); });
 
     function startEdit(id){
       const item = state.expenses.find(x => x.id === id);
@@ -454,50 +514,67 @@
 
     expenseForm.addEventListener('submit', (ev) => {
       ev.preventDefault();
-
-      const payload = {
-        id: editingId || uid(),
-        date: expDate.value,
-        desc: expDesc.value.trim(),
-        amount: Number(expAmount.value),
-        category: expCategory.value.trim(),
-        notes: expNotes.value.trim()
-      };
-
-      if (!payload.date || !payload.desc || !payload.amount) {
-        return alert('Please fill in date, description, and amount.');
-      }
-
-      if (editingId){
-        const idx = state.expenses.findIndex(x => x.id === editingId);
-        if (idx >= 0) state.expenses[idx] = payload;
-      } else {
-        state.expenses.push(payload);
-      }
-
-      saveState(state);
-      closeModal();
-      render();
+      const payload = { id: editingId || uid(), date: expDate.value, desc: expDesc.value.trim(), amount: Number(expAmount.value), category: expCategory.value.trim(), notes: expNotes.value.trim() };
+      if (!payload.date || !payload.desc || !payload.amount) { return alert('Please fill in date, description, and amount.'); }
+      if (editingId){ const idx = state.expenses.findIndex(x => x.id === editingId); if (idx >= 0) state.expenses[idx] = payload; } else { state.expenses.push(payload); }
+      saveState(state); closeModal(); render();
     });
 
-    function removeExpense(id){
-      if (!confirm('Delete expense?')) return;
-      state.expenses = state.expenses.filter(e => e.id !== id);
-      saveState(state);
-      render();
+    function removeExpense(id){ if (!confirm('Delete expense?')) return; state.expenses = state.expenses.filter(e => e.id !== id); saveState(state); render(); }
+
+    function escapeHtml(s){ if (s === undefined || s === null) return ''; return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+    function escapeHtmlAttr(s){ if (s === undefined || s === null) return ''; return String(s).replace(/\"/g,'&quot;').replace(/</g,'&lt;'); }
+
+    // Create or update charts
+    function ensureCharts(){
+      const spendCtx = document.getElementById('spendChart').getContext('2d');
+      const catCtx = document.getElementById('catChart').getContext('2d');
+      const donutCtx = document.getElementById('budgetDonut').getContext('2d');
+
+      if (!spendChart) spendChart = new Chart(spendCtx,{type:'line',data:{labels:[],datasets:[{label:'Spent',data:[],borderColor:getComputedStyle(document.documentElement).getPropertyValue('--accent') || '#2b7cff',backgroundColor:'rgba(43,124,255,0.12)',tension:0.3,fill:true}]},options:{plugins:{legend:{display:false}},scales:{x:{display:true},y:{display:true}}}});
+
+      if (!catChart) catChart = new Chart(catCtx,{type:'pie',data:{labels:[],datasets:[{data:[],backgroundColor:[]} ]},options:{plugins:{legend:{position:'bottom'}}}});
+
+      if (!budgetDonut) budgetDonut = new Chart(donutCtx,{type:'doughnut',data:{labels:['Remaining','Spent'],datasets:[{data:[0,0],backgroundColor:['rgba(0,0,0,0.08)', 'rgba(43,124,255,0.8)']}]},options:{plugins:{legend:{display:false}}}});
     }
 
-    function escapeHtml(s){
-      if (s === undefined || s === null) return '';
-      return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-    }
+    function updateChartsForMonth(monthKey){
+      ensureCharts();
+      const expenses = getExpensesForMonth(monthKey);
 
-    function escapeHtmlAttr(s){
-      if (s === undefined || s === null) return '';
-      return String(s).replace(/\"/g,'&quot;').replace(/</g,'&lt;');
+      // spendChart: group by day
+      const days = {};
+      for (const e of expenses){ const day = e.date.slice(-2); days[day] = (days[day]||0) + Number(e.amount); }
+      const sortedDays = Object.keys(days).sort();
+      spendChart.data.labels = sortedDays.length ? sortedDays : ['01'];
+      spendChart.data.datasets[0].data = sortedDays.length ? sortedDays.map(d => days[d]) : [0];
+      spendChart.update();
+
+      // catChart: spending per category
+      const spentByCat = {};
+      for (const e of expenses){ const c = e.category || 'Uncategorized'; spentByCat[c] = (spentByCat[c]||0) + Number(e.amount); }
+      const labels = Object.keys(spentByCat);
+      const data = labels.map(l => spentByCat[l]);
+      const colors = labels.map((_,i)=>{
+        const hues = [220, 200, 160, 120, 60, 30, 340, 280];
+        return `hsl(${hues[i%hues.length]} 80% 60%)`;
+      });
+      catChart.data.labels = labels; catChart.data.datasets[0].data = data; catChart.data.datasets[0].backgroundColor = colors; catChart.update();
+
+      // budget donut: remaining vs spent
+      const categories = getCategoriesForMonth(monthKey);
+      const totalAllocated = categories.reduce((s,c)=>s+Number(c.allocated||0),0);
+      const manualBudget = Number(state.budgets[monthKey] ?? 0);
+      const budgetFromAlloc = totalAllocated > 0;
+      const budget = budgetFromAlloc ? totalAllocated : manualBudget;
+      const totalSpent = expenses.reduce((s,e)=>s+Number(e.amount),0);
+      const rem = Math.max(0, budget - totalSpent);
+      budgetDonut.data.datasets[0].data = [rem, totalSpent];
+      budgetDonut.update();
     }
 
     function render(){
+      // UI state
       currencySelect.value = getSelectedCurrency();
       const monthKey = getMonthKeyFromInput(monthPicker.value);
       const expenses = getExpensesForMonth(monthKey);
@@ -511,21 +588,12 @@
       budgetInput.disabled = !!budgetFromAlloc;
       budgetDisabledHint.style.display = budgetFromAlloc ? 'inline' : 'none';
 
-      if (expenses.length === 0){
-        expensesContainer.innerHTML = '<div class="no-data">No expenses for this month.</div>';
-      } else {
+      // expenses table
+      if (expenses.length === 0){ expensesContainer.innerHTML = '<div class="no-data">No expenses for this month.</div>'; }
+      else{
         let html = '<table><thead><tr><th style="width:90px">Date</th><th>Description</th><th style="width:110px">Category</th><th style="width:110px">Amount</th><th style="width:100px"></th></tr></thead><tbody>';
         for (const e of expenses){
-          html += `<tr>
-            <td class="small">${e.date}</td>
-            <td>${escapeHtml(e.desc)}<div class="small muted">${escapeHtml(e.notes || '')}</div></td>
-            <td><span class="category">${escapeHtml(e.category || '—')}</span></td>
-            <td>${formatMoney(Number(e.amount))}</td>
-            <td class="actions">
-              <button class="ghost edit" data-id="${e.id}">Edit</button>
-              <button class="ghost delete" data-id="${e.id}">Delete</button>
-            </td>
-          </tr>`;
+          html += `<tr>\n<td class="small">${e.date}</td>\n<td>${escapeHtml(e.desc)}<div class="small muted">${escapeHtml(e.notes || '')}</div></td>\n<td><span class="category">${escapeHtml(e.category || '—')}</span></td>\n<td>${formatMoney(Number(e.amount))}</td>\n<td class="actions">\n<button class="ghost edit" data-id="${e.id}">Edit</button>\n<button class="ghost delete" data-id="${e.id}">Delete</button>\n</td>\n</tr>`;
         }
         html += '</tbody></table>';
         expensesContainer.innerHTML = html;
@@ -542,371 +610,109 @@
       remainingEl.textContent = formatMoney(remaining);
       const pct = budget > 0 ? Math.min(100, Math.round((totalSpent / budget) * 100)) : 0;
       percentUsed.textContent = pct + '%';
-      meterFill.style.width = pct + '%';
-      meterFill.style.background = pct >= 100 ? 'linear-gradient(90deg,#ff7b7b,#ffb07b)' : 'linear-gradient(90deg,var(--accent),#7bd5ff)';
 
-      const spentByCat = {};
-      for (const e of expenses){
-        const c = e.category || 'Uncategorized';
-        spentByCat[c] = (spentByCat[c] || 0) + Number(e.amount);
-      }
+      // meter isn't used visually now, but keep width update if present
+      if (meterFill) meterFill.style.width = pct + '%';
 
+      // by category breakdown elements
       byCategory.innerHTML = '';
-      if (categories.length === 0 && Object.keys(spentByCat).length === 0){
+      if (categories.length === 0 && Object.keys(expenses.reduce((acc,e)=>{acc[e.category||'Uncategorized']=(acc[e.category||'Uncategorized']||0)+Number(e.amount);return acc;},{})).length === 0){
         byCategory.innerHTML = '<div class="small muted">No data</div>';
       } else {
-        for (const c of categories){
-          const name = c.name;
-          const alloc = Number(c.allocated || 0);
-          const spent = spentByCat[name] || 0;
-          const rem = alloc - spent;
-          const pctCat = alloc > 0 ? Math.min(100, Math.round((spent / alloc) * 100)) : (totalSpent > 0 ? Math.round((spent / totalSpent) * 100) : 0);
-          const node = document.createElement('div');
-          node.style.display = 'flex';
-          node.style.justifyContent = 'space-between';
-          node.style.marginTop = '6px';
-          node.innerHTML = `<div><strong>${escapeHtml(name)}</strong> <span class="small muted">· ${pctCat}%</span><div class="small muted">Spent: ${formatMoney(spent)} · Allocated: ${formatMoney(alloc)}</div></div><div>${formatMoney(rem)}</div>`;
-          byCategory.appendChild(node);
-        }
+        const spentByCat = {};
+        for (const e of expenses){ const c = e.category || 'Uncategorized'; spentByCat[c] = (spentByCat[c] || 0) + Number(e.amount); }
+        for (const c of categories){ const name = c.name; const alloc = Number(c.allocated||0); const spent = spentByCat[name] || 0; const rem = alloc - spent; const pctCat = alloc>0?Math.min(100,Math.round((spent/alloc)*100)):(totalSpent>0?Math.round((spent/totalSpent)*100):0); const node = document.createElement('div'); node.style.display='flex'; node.style.justifyContent='space-between'; node.style.marginTop='6px'; node.innerHTML = `<div><strong>${escapeHtml(name)}</strong> <span class="small muted">· ${pctCat}%</span><div class="small muted">Spent: ${formatMoney(spent)} · Allocated: ${formatMoney(alloc)}</div></div><div>${formatMoney(rem)}</div>`; byCategory.appendChild(node); }
 
-        const extra = Object.keys(spentByCat).filter(n => !categories.some(c => c.name === n));
-        for (const name of extra){
-          const spent = spentByCat[name];
-          const node = document.createElement('div');
-          node.style.display = 'flex';
-          node.style.justifyContent = 'space-between';
-          node.style.marginTop = '6px';
-          node.innerHTML = `<div><strong>${escapeHtml(name)}</strong> <span class="small muted">· unallocated</span><div class="small muted">Spent: ${formatMoney(spent)}</div></div><div>${formatMoney(spent)}</div>`;
-          byCategory.appendChild(node);
-        }
+        const extra = Object.keys(spentByCat).filter(n => !categories.some(c=>c.name===n));
+        for (const name of extra){ const spent = spentByCat[name]; const node = document.createElement('div'); node.style.display='flex'; node.style.justifyContent='space-between'; node.style.marginTop='6px'; node.innerHTML = `<div><strong>${escapeHtml(name)}</strong> <span class="small muted">· unallocated</span><div class="small muted">Spent: ${formatMoney(spent)}</div></div><div>${formatMoney(spent)}</div>`; byCategory.appendChild(node); }
 
-        const totalNode = document.createElement('div');
-        totalNode.style.marginTop = '8px';
-        totalNode.className = 'small muted';
-        totalNode.innerHTML = `Total allocated: ${formatMoney(totalAllocated)}`;
-        byCategory.appendChild(totalNode);
+        const totalNode = document.createElement('div'); totalNode.style.marginTop='8px'; totalNode.className='small muted'; totalNode.innerHTML = `Total allocated: ${formatMoney(totalAllocated)}`; byCategory.appendChild(totalNode);
       }
 
-      if (budgetFromAlloc && manualBudget > 0 && totalAllocated !== manualBudget){
-        allocWarning.style.display = 'block';
-        allocWarning.textContent = `Note: allocations (${formatMoney(totalAllocated)}) differ from manual budget (${formatMoney(manualBudget)}). Manual budget updates automatically.`;
-      } else if (manualBudget > 0 && totalAllocated > manualBudget){
-        allocWarning.style.display = 'block';
-        allocWarning.textContent = `Warning: total allocated (${formatMoney(totalAllocated)}) exceeds manual budget (${formatMoney(manualBudget)}).`;
-      } else {
-        allocWarning.style.display = 'none';
-      }
+      if (budgetFromAlloc && manualBudget > 0 && totalAllocated !== manualBudget){ allocWarning.style.display='block'; allocWarning.textContent = `Note: allocations (${formatMoney(totalAllocated)}) differ from manual budget (${formatMoney(manualBudget)}). Manual budget updates automatically.`; }
+      else if (manualBudget > 0 && totalAllocated > manualBudget){ allocWarning.style.display='block'; allocWarning.textContent = `Warning: total allocated (${formatMoney(totalAllocated)}) exceeds manual budget (${formatMoney(manualBudget)}).`; }
+      else { allocWarning.style.display='none'; }
 
       renderCategoriesEditor(monthKey);
       renderGlobalEditor();
       renderCategoryDatalist(monthKey);
       autoApplyGlobalEl.checked = !!(state.prefs && state.prefs.autoApplyGlobal);
+
+      // update charts
+      updateChartsForMonth(monthKey);
     }
 
     function renderCategoriesEditor(monthKey){
-      const cats = getCategoriesForMonth(monthKey);
-      catList.innerHTML = '';
-      if (cats.length === 0){
-        catList.innerHTML = '<div class="small muted">No categories defined for this month.</div>';
-      } else {
-        for (const c of cats){
-          const row = document.createElement('div');
-          row.className = 'cat-row';
-          row.innerHTML = `
-            <input type="text" class="cat-name" value="${escapeHtmlAttr(c.name)}" />
-            <input type="number" class="cat-alloc" value="${Number(c.allocated || 0)}" min="0" step="0.01" />
-            <button class="ghost save-cat" data-id="${c.id}">Save</button>
-            <button class="ghost delete-cat" data-id="${c.id}">Delete</button>
-          `;
-          catList.appendChild(row);
-
-          row.querySelector('.save-cat').onclick = () => {
-            const newName = row.querySelector('.cat-name').value.trim();
-            const newAlloc = Number(row.querySelector('.cat-alloc').value || 0);
-            if (!newName) return alert('Category name required');
-
-            const month = monthKey;
-            const arr = getCategoriesForMonth(month);
-            const idx = arr.findIndex(x => x.id === c.id);
-            const oldName = arr[idx].name;
-            arr[idx].name = newName;
-            arr[idx].allocated = newAlloc;
-            saveCategoriesForMonth(month, arr);
-
-            for (const e of state.expenses){
-              if (e.date.slice(0,7) === month && e.category === oldName) e.category = newName;
-            }
-            saveState(state);
-            render();
-          };
-
-          row.querySelector('.delete-cat').onclick = () => {
-            if (!confirm('Delete category? This leaves existing expenses uncategorized.')) return;
-            const month = monthKey;
-            let arr = getCategoriesForMonth(month);
-            arr = arr.filter(x => x.id !== c.id);
-            saveCategoriesForMonth(month, arr);
-            render();
-          };
+      const cats = getCategoriesForMonth(monthKey); catList.innerHTML = '';
+      if (cats.length === 0){ catList.innerHTML = '<div class="small muted">No categories defined for this month.</div>'; }
+      else{ for (const c of cats){ const row = document.createElement('div'); row.className='cat-row'; row.innerHTML = `\n<input type="text" class="cat-name" value="${escapeHtmlAttr(c.name)}" />\n<input type="number" class="cat-alloc" value="${Number(c.allocated||0)}" min="0" step="0.01" />\n<button class="ghost save-cat" data-id="${c.id}">Save</button>\n<button class="ghost delete-cat" data-id="${c.id}">Delete</button>\n`; catList.appendChild(row);
+            row.querySelector('.save-cat').onclick = ()=>{ const newName=row.querySelector('.cat-name').value.trim(); const newAlloc=Number(row.querySelector('.cat-alloc').value||0); if(!newName) return alert('Category name required'); const month=monthKey; const arr=getCategoriesForMonth(month); const idx=arr.findIndex(x=>x.id===c.id); const oldName=arr[idx].name; arr[idx].name=newName; arr[idx].allocated=newAlloc; saveCategoriesForMonth(month,arr); for(const e of state.expenses){ if(e.date.slice(0,7)===month && e.category===oldName) e.category=newName; } saveState(state); render(); };
+            row.querySelector('.delete-cat').onclick = ()=>{ if(!confirm('Delete category? This leaves existing expenses uncategorized.')) return; const month=monthKey; let arr=getCategoriesForMonth(month); arr=arr.filter(x=>x.id!==c.id); saveCategoriesForMonth(month,arr); render(); };
         }
       }
     }
 
     function renderGlobalEditor(){
-      const globals = getGlobalCategories();
-      globalCatList.innerHTML = '';
-      if (globals.length === 0){
-        globalCatList.innerHTML = '<div class="small muted">No global categories defined.</div>';
-      } else {
-        for (const c of globals){
-          const row = document.createElement('div');
-          row.className = 'cat-row';
-          row.innerHTML = `
-            <input type="text" class="gcat-name" value="${escapeHtmlAttr(c.name)}" />
-            <input type="number" class="gcat-alloc" value="${Number(c.allocated || 0)}" min="0" step="0.01" />
-            <button class="ghost save-gcat" data-id="${c.id}">Save</button>
-            <button class="ghost delete-gcat" data-id="${c.id}">Delete</button>
-            <button class="ghost delete-months-gcat" data-id="${c.id}">Delete from months</button>
-            <button class="ghost delete-all-gcat" data-id="${c.id}">Delete everywhere</button>
-          `;
-          globalCatList.appendChild(row);
-
-          row.querySelector('.save-gcat').onclick = () => {
-            const newName = row.querySelector('.gcat-name').value.trim();
-            const newAlloc = Number(row.querySelector('.gcat-alloc').value || 0);
-            if (!newName) return alert('Category name required');
-
-            const arr = getGlobalCategories();
-            const idx = arr.findIndex(x => x.id === c.id);
-            arr[idx].name = newName;
-            arr[idx].allocated = newAlloc;
-            saveGlobalCategories(arr);
-            render();
-          };
-
-          row.querySelector('.delete-gcat').onclick = () => {
-            if (!confirm('Delete global category? This removes the template but not existing months or expenses.')) return;
-            let arr = getGlobalCategories();
-            arr = arr.filter(x => x.id !== c.id);
-            saveGlobalCategories(arr);
-            render();
-          };
-
-          row.querySelector('.delete-months-gcat').onclick = () => {
-            if (!confirm(`Remove category "${c.name}" from every month? This removes allocated month categories but keeps expenses unchanged.`)) return;
-            const targetName = c.name;
-            for (const monthKey of Object.keys(state.categories || {})){
-              const arr = state.categories[monthKey].filter(x => x.name !== targetName);
-              saveCategoriesForMonth(monthKey, arr);
-            }
-            render();
-            alert(`Removed "${targetName}" from all months.`);
-          };
-
-          row.querySelector('.delete-all-gcat').onclick = () => {
-            if (!confirm(`Delete everywhere: remove "${c.name}" from all months and clear it from all expenses? This cannot be undone.`)) return;
-            const targetName = c.name;
-
-            let arr = getGlobalCategories();
-            arr = arr.filter(x => x.id !== c.id);
-            saveGlobalCategories(arr);
-
-            for (const monthKey of Object.keys(state.categories || {})){
-              const list = state.categories[monthKey].filter(x => x.name !== targetName);
-              saveCategoriesForMonth(monthKey, list);
-            }
-
-            for (const e of state.expenses){
-              if (e.category === targetName) e.category = '';
-            }
-            saveState(state);
-            render();
-            alert(`Deleted "${targetName}" everywhere.`);
-          };
+      const globals = getGlobalCategories(); globalCatList.innerHTML=''; if(globals.length===0){ globalCatList.innerHTML='<div class="small muted">No global categories defined.</div>'; } else { for(const c of globals){ const row=document.createElement('div'); row.className='cat-row'; row.innerHTML = `\n<input type="text" class="gcat-name" value="${escapeHtmlAttr(c.name)}" />\n<input type="number" class="gcat-alloc" value="${Number(c.allocated||0)}" min="0" step="0.01" />\n<button class="ghost save-gcat" data-id="${c.id}">Save</button>\n<button class="ghost delete-gcat" data-id="${c.id}">Delete</button>\n<button class="ghost delete-months-gcat" data-id="${c.id}">Delete from months</button>\n<button class="ghost delete-all-gcat" data-id="${c.id}">Delete everywhere</button>\n`; globalCatList.appendChild(row);
+            row.querySelector('.save-gcat').onclick=()=>{const newName=row.querySelector('.gcat-name').value.trim(); const newAlloc=Number(row.querySelector('.gcat-alloc').value||0); if(!newName) return alert('Category name required'); const arr=getGlobalCategories(); const idx=arr.findIndex(x=>x.id===c.id); arr[idx].name=newName; arr[idx].allocated=newAlloc; saveGlobalCategories(arr); render(); };
+            row.querySelector('.delete-gcat').onclick=()=>{ if(!confirm('Delete global category? This removes the template but not existing months or expenses.')) return; let arr=getGlobalCategories(); arr=arr.filter(x=>x.id!==c.id); saveGlobalCategories(arr); render(); };
+            row.querySelector('.delete-months-gcat').onclick=()=>{ if(!confirm(`Remove category "${c.name}" from every month? This removes allocated month categories but keeps expenses unchanged.`)) return; const targetName=c.name; for(const monthKey of Object.keys(state.categories||{})){ const arr=state.categories[monthKey].filter(x=>x.name!==targetName); saveCategoriesForMonth(monthKey,arr); } render(); alert(`Removed "${targetName}" from all months.`); };
+            row.querySelector('.delete-all-gcat').onclick=()=>{ if(!confirm(`Delete everywhere: remove "${c.name}" from all months and clear it from all expenses? This cannot be undone.`)) return; const targetName=c.name; let arr=getGlobalCategories(); arr=arr.filter(x=>x.id!==c.id); saveGlobalCategories(arr); for(const monthKey of Object.keys(state.categories||{})){ const list=state.categories[monthKey].filter(x=>x.name!==targetName); saveCategoriesForMonth(monthKey,list); } for(const e of state.expenses){ if(e.category===targetName) e.category=''; } saveState(state); render(); alert(`Deleted "${targetName}" everywhere.`); };
         }
       }
     }
 
-    monthPicker.addEventListener('change', () => {
-      const key = getMonthKeyFromInput(monthPicker.value);
-      budgetInput.value = state.budgets[key] ?? '';
-      expDate.value = monthPicker.value + '-01';
+    // Event wiring
+    monthPicker.addEventListener('change', ()=>{ const key=getMonthKeyFromInput(monthPicker.value); budgetInput.value = state.budgets[key] ?? ''; expDate.value = monthPicker.value + '-01'; if((state.prefs && state.prefs.autoApplyGlobal) && (!state.categories[key] || state.categories[key].length===0)){ const globals=getGlobalCategories(); if(globals.length>0){ const copied = globals.map(g=>({id:uid(),name:g.name,allocated:Number(g.allocated||0)})); saveCategoriesForMonth(key,copied); } } render(); });
 
-      if ((state.prefs && state.prefs.autoApplyGlobal) && (!state.categories[key] || state.categories[key].length === 0)){
-        const globals = getGlobalCategories();
-        if (globals.length > 0){
-          const copied = globals.map(g => ({ id: uid(), name: g.name, allocated: Number(g.allocated || 0) }));
-          saveCategoriesForMonth(key, copied);
-        }
-      }
+    currencySelect.addEventListener('change',(event)=>{ setSelectedCurrency(event.target.value); render(); });
 
-      render();
-    });
+    toggleManageCats.addEventListener('click', ()=>{ categoriesEditor.style.display = categoriesEditor.style.display === 'none' ? 'block' : 'none'; });
+    tabMonth.addEventListener('click', ()=>{ tabMonth.classList.add('activeTab'); tabGlobal.classList.remove('activeTab'); monthEditor.style.display='block'; globalEditor.style.display='none'; });
+    tabGlobal.addEventListener('click', ()=>{ tabGlobal.classList.add('activeTab'); tabMonth.classList.remove('activeTab'); globalEditor.style.display='block'; monthEditor.style.display='none'; });
 
-    currencySelect.addEventListener('change', (event) => {
-      setSelectedCurrency(event.target.value);
-      render();
-    });
+    addCategoryBtn.addEventListener('click', ()=>{ const month=getMonthKeyFromInput(monthPicker.value); const name=(newCatName.value||'').trim(); const alloc=Number(newCatAlloc.value||0); if(!name) return alert('Category name required'); const arr=getCategoriesForMonth(month); if(arr.some(c=>c.name.toLowerCase()===name.toLowerCase())) return alert('Category already exists for this month.'); arr.push({id:uid(),name,allocated:alloc}); saveCategoriesForMonth(month,arr); newCatName.value=''; newCatAlloc.value=''; render(); });
 
-    toggleManageCats.addEventListener('click', () => {
-      categoriesEditor.style.display = categoriesEditor.style.display === 'none' ? 'block' : 'none';
-    });
+    addGlobalBtn.addEventListener('click', ()=>{ const name=(newGlobalName.value||'').trim(); const alloc=Number(newGlobalAlloc.value||0); if(!name) return alert('Global category name required'); const arr=getGlobalCategories(); if(arr.some(c=>c.name.toLowerCase()===name.toLowerCase())) return alert('Global category already exists.'); arr.push({id:uid(),name,allocated:alloc}); saveGlobalCategories(arr); newGlobalName.value=''; newGlobalAlloc.value=''; render(); });
 
-    tabMonth.addEventListener('click', () => {
-      tabMonth.classList.add('activeTab');
-      tabGlobal.classList.remove('activeTab');
-      monthEditor.style.display = 'block';
-      globalEditor.style.display = 'none';
-    });
+    applyGlobalBtn.addEventListener('click', ()=>{ if(!confirm('Replace this month categories with the current global ones?')) return; const month=getMonthKeyFromInput(monthPicker.value); const globals=getGlobalCategories(); const copied = globals.map(g=>({id:uid(),name:g.name,allocated:Number(g.allocated||0)})); saveCategoriesForMonth(month,copied); render(); });
 
-    tabGlobal.addEventListener('click', () => {
-      tabGlobal.classList.add('activeTab');
-      tabMonth.classList.remove('activeTab');
-      globalEditor.style.display = 'block';
-      monthEditor.style.display = 'none';
-    });
+    mergeGlobalBtn.addEventListener('click', ()=>{ const month=getMonthKeyFromInput(monthPicker.value); const globals=getGlobalCategories(); const current=getCategoriesForMonth(month); const lower=current.map(c=>c.name.toLowerCase()); for(const g of globals){ if(!lower.includes(g.name.toLowerCase())) current.push({id:uid(),name:g.name,allocated:Number(g.allocated||0)}); } saveCategoriesForMonth(month,current); render(); });
 
-    addCategoryBtn.addEventListener('click', () => {
-      const month = getMonthKeyFromInput(monthPicker.value);
-      const name = (newCatName.value || '').trim();
-      const alloc = Number(newCatAlloc.value || 0);
-      if (!name) return alert('Category name required');
-      const arr = getCategoriesForMonth(month);
-      if (arr.some(c => c.name.toLowerCase() === name.toLowerCase())) return alert('Category already exists for this month.');
-      arr.push({ id: uid(), name, allocated: alloc });
-      saveCategoriesForMonth(month, arr);
-      newCatName.value = '';
-      newCatAlloc.value = '';
-      render();
-    });
+    autoApplyGlobalEl.addEventListener('change', ()=>{ state.prefs = state.prefs || {}; state.prefs.autoApplyGlobal = !!autoApplyGlobalEl.checked; saveState(state); });
 
-    addGlobalBtn.addEventListener('click', () => {
-      const name = (newGlobalName.value || '').trim();
-      const alloc = Number(newGlobalAlloc.value || 0);
-      if (!name) return alert('Global category name required');
-      const arr = getGlobalCategories();
-      if (arr.some(c => c.name.toLowerCase() === name.toLowerCase())) return alert('Global category already exists.');
-      arr.push({ id: uid(), name, allocated: alloc });
-      saveGlobalCategories(arr);
-      newGlobalName.value = '';
-      newGlobalAlloc.value = '';
-      render();
-    });
+    clearMonth.addEventListener('click', ()=>{ if(!confirm('Clear this month?')) return; const key=getMonthKeyFromInput(monthPicker.value); state.expenses = state.expenses.filter(e=>e.date.slice(0,7)!==key); delete state.budgets[key]; delete state.categories[key]; saveState(state); render(); });
 
-    applyGlobalBtn.addEventListener('click', () => {
-      if (!confirm('Replace this month categories with the current global ones?')) return;
-      const month = getMonthKeyFromInput(monthPicker.value);
-      const globals = getGlobalCategories();
-      const copied = globals.map(g => ({ id: uid(), name: g.name, allocated: Number(g.allocated || 0) }));
-      saveCategoriesForMonth(month, copied);
-      render();
-    });
+    clearAll.addEventListener('click', ()=>{ if(!confirm('Reset all data in this browser?')) return; state = defaultState(); saveState(state); render(); });
 
-    mergeGlobalBtn.addEventListener('click', () => {
-      const month = getMonthKeyFromInput(monthPicker.value);
-      const globals = getGlobalCategories();
-      const current = getCategoriesForMonth(month);
-      const lower = current.map(c => c.name.toLowerCase());
-      for (const g of globals){
-        if (!lower.includes(g.name.toLowerCase())){
-          current.push({ id: uid(), name: g.name, allocated: Number(g.allocated || 0) });
-        }
-      }
-      saveCategoriesForMonth(month, current);
-      render();
-    });
+    exportCsvTop.addEventListener('click', ()=>{ const key=getMonthKeyFromInput(monthPicker.value); const expenses=getExpensesForMonth(key); if(expenses.length===0) return alert('No expenses in this month to export.'); let csv='id,date,description,category,amount,notes\n'; for(const e of expenses){ csv += `${e.id},${e.date},"${(e.desc||'').replace(/\"/g,'\"\"')}","${(e.category||'').replace(/\"/g,'\"\"')}",${Number(e.amount)},"${(e.notes||'').replace(/\"/g,'\"\"')}"\n`; } const blob=new Blob([csv],{type:'text/csv'}); const url=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download=`expenses-${key}.csv`; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url); });
 
-    autoApplyGlobalEl.addEventListener('change', () => {
-      state.prefs = state.prefs || {};
-      state.prefs.autoApplyGlobal = !!autoApplyGlobalEl.checked;
-      saveState(state);
-    });
+    gotoManageCats.onclick = ()=>{ categoriesEditor.style.display='block'; monthEditor.style.display='block'; tabMonth.classList.add('activeTab'); tabGlobal.classList.remove('activeTab'); window.scrollTo({ top: document.getElementById('categoriesEditor').offsetTop - 20, behavior: 'smooth' }); };
 
-    clearMonth.addEventListener('click', () => {
-      if (!confirm('Clear this month?')) return;
-      const key = getMonthKeyFromInput(monthPicker.value);
-      state.expenses = state.expenses.filter(e => e.date.slice(0,7) !== key);
-      delete state.budgets[key];
-      delete state.categories[key];
-      saveState(state);
-      render();
-    });
+    downloadAll.onclick = ()=>{ const all = state.expenses || []; if(all.length===0) return alert('No expenses to export.'); let csv='id,date,description,category,amount,notes\n'; for(const e of all){ csv += `${e.id},${e.date},"${(e.desc||'').replace(/\"/g,'\"\"')}","${(e.category||'').replace(/\"/g,'\"\"')}",${Number(e.amount)},"${(e.notes||'').replace(/\"/g,'\"\"')}"\n`; } const blob=new Blob([csv],{type:'text/csv'}); const url=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download='expenses-all.csv'; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url); };
 
-    clearAll.addEventListener('click', () => {
-      if (!confirm('Reset all data in this browser?')) return;
-      state = defaultState();
-      saveState(state);
-      render();
-    });
+    // Theme toggle
+    themeToggle.addEventListener('click', ()=>{ const current=getTheme(); const next = current==='dark'?'light':'dark'; applyTheme(next); });
 
-    exportCsvTop.addEventListener('click', () => {
-      const key = getMonthKeyFromInput(monthPicker.value);
-      const expenses = getExpensesForMonth(key);
-      if (expenses.length === 0) return alert('No expenses in this month to export.');
-
-      let csv = 'id,date,description,category,amount,notes\n';
-      for (const e of expenses){
-        csv += `${e.id},${e.date},"${(e.desc || '').replace(/\"/g,'\"\"')}","${(e.category || '').replace(/\"/g,'\"\"')}",${Number(e.amount)},"${(e.notes || '').replace(/\"/g,'\"\"')}"\n`;
-      }
-
-      const blob = new Blob([csv], { type: 'text/csv' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `expenses-${key}.csv`;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      URL.revokeObjectURL(url);
-    });
-
-    gotoManageCats.onclick = () => {
-      categoriesEditor.style.display = 'block';
-      monthEditor.style.display = 'block';
-      tabMonth.classList.add('activeTab');
-      tabGlobal.classList.remove('activeTab');
-      window.scrollTo({ top: document.getElementById('categoriesEditor').offsetTop - 20, behavior: 'smooth' });
-    };
-
-    downloadAll.onclick = () => {
-      const all = state.expenses || [];
-      if (all.length === 0) return alert('No expenses to export.');
-
-      let csv = 'id,date,description,category,amount,notes\n';
-      for (const e of all){
-        csv += `${e.id},${e.date},"${(e.desc || '').replace(/\"/g,'\"\"')}","${(e.category || '').replace(/\"/g,'\"\"')}",${Number(e.amount)},"${(e.notes || '').replace(/\"/g,'\"\"')}"\n`;
-      }
-
-      const blob = new Blob([csv], { type: 'text/csv' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = 'expenses-all.csv';
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      URL.revokeObjectURL(url);
-    };
-
+    // Init
     (function init(){
+      // Apply saved theme
+      applyTheme(getTheme());
       currencySelect.value = getSelectedCurrency();
       monthPicker.value = todayMonth();
       expDate.value = monthPicker.value + '-01';
       const key = getMonthKeyFromInput(monthPicker.value);
       budgetInput.value = state.budgets[key] ?? '';
+      // prepare charts
+      ensureCharts();
       monthPicker.dispatchEvent(new Event('change'));
       render();
     })();
 
     window.addEventListener('storage', (event) => {
-      if (event.key === LS_KEY){
-        state = loadState();
-        render();
-      }
-      if (event.key === CURRENCY_STORAGE_KEY){
-        currencySelect.value = getSelectedCurrency();
-        render();
-      }
+      if (event.key === LS_KEY){ state = loadState(); render(); }
+      if (event.key === CURRENCY_STORAGE_KEY){ currencySelect.value = getSelectedCurrency(); render(); }
+      if (event.key === THEME_KEY){ applyTheme(getTheme()); }
     });
   </script>
 </body>

@@ -52,6 +52,8 @@
       opacity: 0.98;
     }
     button:focus{outline: 3px solid rgba(43,124,255,0.12); outline-offset:2px}
+    a.inline-link{color:var(--accent);text-decoration:none;font-weight:600}
+    a.inline-link:hover{text-decoration:underline}
     .grid{display:grid;grid-template-columns:1fr 380px;gap:20px;margin-top:18px}
     .card{background:var(--panel);border:1px solid #f0f3f8;border-radius:10px;padding:14px}
     .big{font-size:20px;font-weight:700}
@@ -226,7 +228,7 @@
 
       <div class="card summary">
         <div>
-          <div class="small muted">Quick actions</div>
+          <div class="muted small">Quick actions</div>
           <div style="display:flex;flex-direction:column;gap:8px;margin-top:8px">
             <button id="gotoManageCats" class="ghost">Open Categories</button>
             <button id="downloadAll" class="ghost">Export All CSV</button>
@@ -266,6 +268,7 @@
           <label>Google Apps Script Web App URL
             <input type="text" id="settingsSheetsUrl" placeholder="https://script.google.com/macros/s/.../exec" />
           </label>
+          <a class="inline-link" href="https://script.google.com/home/projects" target="_blank" rel="noopener noreferrer">Open Google Apps Script</a>
           <label style="display:flex;align-items:center;gap:8px"><input type="checkbox" id="settingsSyncCheckbox" /> Sync to Google Sheets</label>
           <label style="display:flex;align-items:center;gap:8px"><input type="checkbox" id="settingsUseAsPrimary" /> Use Google Sheets as primary DB (load on startup)</label>
         </div>
@@ -456,14 +459,12 @@
 
     function saveCategoriesForMonth(key, arr){
       if (!arr || arr.length === 0){
-        // If the month has no categories, remove month categories and clear any budget-derived value.
         delete state.categories[key];
         delete state.budgets[key];
         saveState(state);
         if (getMonthKeyFromInput(monthPicker.value) === key){
           budgetInput.value = state.budgets[key] ?? '';
         }
-        // Optionally push empty list to sheets
         if (state.prefs && state.prefs.syncToSheets){
           const payload = { type: 'categories', month: key, categories: [] };
           sendToSheets(payload).catch(err => { console.warn('Sheets sync failed (categories clear)', err); });
@@ -471,7 +472,6 @@
         return;
       }
 
-      // Always store categories and synchronize the month budget with the sum of allocations (even if 0)
       state.categories[key] = arr;
       const totalAllocated = arr.reduce((sum, c) => sum + Number(c.allocated || 0), 0);
       state.budgets[key] = Number(totalAllocated);
@@ -559,7 +559,6 @@
         notes: expNotes.value.trim()
       };
 
-      // Validate amount using Number.isFinite so zero is allowed but NaN is not
       if (!payload.date || !payload.desc || !Number.isFinite(payload.amount)) {
         return alert('Please fill in date, description, and a valid amount.');
       }
@@ -573,7 +572,6 @@
 
       saveState(state);
 
-      // Optionally push to Google Sheets
       if (state.prefs && state.prefs.syncToSheets){
         const p = { type: 'expense', expense: payload };
         sendToSheets(p).then(r => {
@@ -670,7 +668,8 @@
           node.style.display = 'flex';
           node.style.justifyContent = 'space-between';
           node.style.marginTop = '6px';
-          node.innerHTML = `<div><strong>${escapeHtml(name)}</strong> <span class="small muted">· ${pctCat}%</span><div class="small muted">Spent: ${formatMoney(spent)} · Allocated: ${formatMoney(alloc)}</div></div><div>${formatMoney(rem)}</div>`;
+          node.innerHTML = `<div><strong>${escapeHtml(name)}</strong> <span class="small muted">· ${pctCat}%</span><div class="small muted">Spent: ${formatMoney(spent)} · Allocated: ${formatMoney(alloc)} · Remaining: ${formatMoney(rem)}</div></div>
+          <div class="small muted">${formatMoney(rem)}</div>`;
           byCategory.appendChild(node);
         }
 
@@ -707,11 +706,9 @@
       renderCategoryDatalist(monthKey);
       autoApplyGlobalEl.checked = !!(state.prefs && state.prefs.autoApplyGlobal);
 
-      // Sheets UI
       sheetsUrlInput.value = getSheetsUrl();
       syncSheetsCheckbox.checked = !!(state.prefs && state.prefs.syncToSheets);
 
-      // Keep settings modal inputs in sync when open
       settingsSheetsUrl.value = getSheetsUrl();
       settingsSyncCheckbox.checked = !!(state.prefs && state.prefs.syncToSheets);
       settingsUseAsPrimary.checked = !!(state.prefs && state.prefs.useSheetsPrimary);
@@ -1002,120 +999,43 @@
       URL.revokeObjectURL(url);
     };
 
-    // Settings modal handlers
-    openSettingsBtn.addEventListener('click', (e) => {
-      e.stopPropagation();
+    openSettingsBtn.addEventListener('click', () => {
+      settingsModal.classList.add('show');
+      settingsModal.setAttribute('aria-hidden', 'false');
       settingsSheetsUrl.value = getSheetsUrl();
       settingsSyncCheckbox.checked = !!(state.prefs && state.prefs.syncToSheets);
       settingsUseAsPrimary.checked = !!(state.prefs && state.prefs.useSheetsPrimary);
-      settingsModal.classList.add('show');
-      settingsModal.setAttribute('aria-hidden','false');
     });
 
-    function closeSettings(){
+    closeSettingsBtn.addEventListener('click', () => {
       settingsModal.classList.remove('show');
-      settingsModal.setAttribute('aria-hidden','true');
-    }
+      settingsModal.setAttribute('aria-hidden', 'true');
+    });
 
-    closeSettingsBtn.addEventListener('click', closeSettings);
-    cancelSettingsBtn.addEventListener('click', closeSettings);
-    settingsModal.addEventListener('click', closeSettings);
+    cancelSettingsBtn.addEventListener('click', () => {
+      settingsModal.classList.remove('show');
+      settingsModal.setAttribute('aria-hidden', 'true');
+    });
 
-    settingsForm.addEventListener('submit', (ev) => {
-      ev.preventDefault();
+    settingsForm.addEventListener('submit', (event) => {
+      event.preventDefault();
       const url = settingsSheetsUrl.value.trim();
       setSheetsUrl(url);
       state.prefs = state.prefs || {};
       state.prefs.syncToSheets = !!settingsSyncCheckbox.checked;
       state.prefs.useSheetsPrimary = !!settingsUseAsPrimary.checked;
       saveState(state);
-
-      // keep main UI in sync
-      sheetsUrlInput.value = getSheetsUrl();
-      syncSheetsCheckbox.checked = !!state.prefs.syncToSheets;
-      render();
-      closeSettings();
-
-      if (state.prefs.useSheetsPrimary){
-        // attempt to load on-demand
-        loadFromSheetsIfConfigured().catch(err => console.warn('Load from sheets failed', err));
-      }
+      sheetsUrlInput.value = url;
+      syncSheetsCheckbox.checked = state.prefs.syncToSheets;
+      settingsModal.classList.remove('show');
+      settingsModal.setAttribute('aria-hidden', 'true');
     });
 
-    testSheetsBtn.addEventListener('click', async () => {
-      const url = sheetsUrlInput.value.trim();
-      setSheetsUrl(url);
-      sheetsStatus.textContent = 'Testing...';
-      try{
-        const res = await sendToSheets({ type: 'ping', time: new Date().toISOString() });
-        sheetsStatus.textContent = res.ok ? 'Connected' : `Connection failed: ${res.status}`;
-      }catch(e){
-        sheetsStatus.textContent = 'Connection failed';
-        console.warn('Sheets test failed', e);
-      }
-    });
-
-    pushAllBtn.addEventListener('click', async () => {
-      const month = getMonthKeyFromInput(monthPicker.value);
-      const payload = {
-        type: 'month_dump',
-        month,
-        budgets: state.budgets[month] ?? 0,
-        categories: (state.categories[month] || []).map(c => ({ name: c.name, allocated: Number(c.allocated || 0) })),
-        expenses: getExpensesForMonth(month)
-      };
-      sheetsStatus.textContent = 'Pushing...';
-      try{
-        const res = await sendToSheets(payload);
-        sheetsStatus.textContent = res.ok ? 'Pushed month' : `Push failed: ${res.status}`;
-      }catch(e){
-        sheetsStatus.textContent = 'Push failed';
-        console.warn('Push failed', e);
-      }
-    });
-
-    sheetsUrlInput.addEventListener('change', () => { setSheetsUrl(sheetsUrlInput.value.trim()); });
-    syncSheetsCheckbox.addEventListener('change', () => { state.prefs = state.prefs || {}; state.prefs.syncToSheets = !!syncSheetsCheckbox.checked; saveState(state); render(); });
-
-    // Optional: load from sheets if configured and requested by user preference
-    async function loadFromSheetsIfConfigured(){
-      const url = getSheetsUrl();
-      if (!url) throw new Error('No sheets URL');
-      try{
-        const resp = await fetch(url + (url.indexOf('?') === -1 ? '?' : '&') + 'action=load', { method: 'GET' });
-        const json = await resp.json();
-        if (!json || !json.ok) throw new Error('Load failed');
-        // Merge/replace state parts
-        state.budgets = json.budgets || {};
-        state.categories = json.categories || {};
-        // Expenses may be an array of objects with id,date,desc,category,amount,notes
-        state.expenses = Array.isArray(json.expenses) ? json.expenses.map(e => ({ id: e.id || uid(), date: e.date || '', desc: e.desc || '', category: e.category || '', amount: Number(e.amount || 0), notes: e.notes || '' })) : [];
-        saveState(state);
-        render();
-        sheetsStatus.textContent = 'Loaded from Sheets';
-        return true;
-      }catch(e){
-        sheetsStatus.textContent = 'Load from Sheets failed';
-        console.warn('loadFromSheetsIfConfigured error', e);
-        throw e;
-      }
-    }
-
-    (function init(){
-      currencySelect.value = getSelectedCurrency();
+    document.addEventListener('DOMContentLoaded', () => {
       monthPicker.value = todayMonth();
-      expDate.value = monthPicker.value + '-01';
-      const key = getMonthKeyFromInput(monthPicker.value);
-      budgetInput.value = state.budgets[key] ?? '';
-      sheetsUrlInput.value = getSheetsUrl();
-
-      // If the user opted to use Sheets as primary and a URL is configured, try to load
-      if (state.prefs && state.prefs.useSheetsPrimary && getSheetsUrl()){
-        loadFromSheetsIfConfigured().catch(() => { /* ignore on init */ });
-      }
-
+      budgetInput.value = state.budgets[monthPicker.value] ?? '';
       render();
-    })();
+    });
   </script>
 </body>
 </html>
